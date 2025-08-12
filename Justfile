@@ -1,7 +1,7 @@
 # Reprex Generator for R Extension - Common Tasks
 
 # Extension version (should match package.json)
-VERSION := "0.0.1"
+VERSION := `jq -r < package.json .version`
 
 # Install dependencies
 install:
