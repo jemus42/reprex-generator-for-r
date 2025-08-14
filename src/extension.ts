@@ -13,10 +13,42 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Reprex Generator for R extension is now active!');
 
 	const reprexAddin = vscode.commands.registerCommand('reprex-generator-for-r.reprexAddin', async () => {
-		// Launch the original reprex addin
-		// Note: This will open in external browser as Shiny apps cannot run in VS Code webviews
-		vscode.window.showInformationMessage('Starting reprex addin in browser...');
-		await runRCommand('reprex::reprex_addin()');
+		vscode.window.showInformationMessage('Starting reprex addin...');
+		
+		try {
+			// Try Positron's workbench command to execute R code in console
+			await vscode.commands.executeCommand('workbench.action.executeCode.console', {
+				langId: 'r',
+				code: 'reprex::reprex_addin()',
+				focus: true
+			});
+		} catch (positronError) {
+			try {
+				// Fallback: try R extension command if available
+				await vscode.commands.executeCommand('r.runSelection', 'reprex::reprex_addin()');
+			} catch (rExtensionError) {
+				// Final fallback: copy to clipboard and ask user to run manually
+				await vscode.env.clipboard.writeText('reprex::reprex_addin()');
+				const selection = await vscode.window.showInformationMessage(
+					'Could not send command to R console automatically. The command has been copied to clipboard.',
+					'Paste in R Console',
+					'Use Alternative'
+				);
+				
+				if (selection === 'Use Alternative') {
+					const altSelection = await vscode.window.showQuickPick([
+						'Use Selected Code',
+						'Use Clipboard'
+					], { placeHolder: 'Choose alternative reprex method' });
+					
+					if (altSelection === 'Use Selected Code') {
+						await vscode.commands.executeCommand('reprex-generator-for-r.reprexSelection');
+					} else if (altSelection === 'Use Clipboard') {
+						await vscode.commands.executeCommand('reprex-generator-for-r.reprexClipboard');
+					}
+				}
+			}
+		}
 	});
 
 	const reprexFile = vscode.commands.registerCommand('reprex-generator-for-r.reprexFile', async () => {
@@ -90,7 +122,8 @@ export function activate(context: vscode.ExtensionContext) {
 async function runRCommand(command: string) {
 	try {
 		vscode.window.showInformationMessage(`Running: ${command}`);
-		const { stdout, stderr } = await execAsync(`Rscript -e "${command}"`);
+		// Set CLIPR_ALLOW to allow clipboard operations in non-interactive mode
+		const { stdout, stderr } = await execAsync(`CLIPR_ALLOW=TRUE Rscript -e "${command}"`);
 		
 		if (stderr) {
 			vscode.window.showErrorMessage(`R Error: ${stderr}`);
@@ -321,273 +354,5 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-function showReprexAddinInterface() {
-	// Create or reveal the addin panel
-	if (addinPanel) {
-		addinPanel.reveal(vscode.ViewColumn.Two);
-	} else {
-		addinPanel = vscode.window.createWebviewPanel(
-			'reprexAddin',
-			'Reprex Addin',
-			vscode.ViewColumn.Two,
-			{
-				enableScripts: true,
-				retainContextWhenHidden: true
-			}
-		);
-		
-		// Reset when the panel is closed
-		addinPanel.onDidDispose(() => {
-			addinPanel = undefined;
-		});
-
-		// Handle messages from the webview
-		addinPanel.webview.onDidReceiveMessage(async (message) => {
-			switch (message.command) {
-				case 'runReprex':
-					const { source, text, venue } = message;
-					let codeToReprex = '';
-					
-					if (source === 'clipboard') {
-						try {
-							codeToReprex = await vscode.env.clipboard.readText();
-						} catch (error) {
-							vscode.window.showErrorMessage('Failed to read from clipboard');
-							return;
-						}
-					} else if (source === 'selection') {
-						const activeEditor = vscode.window.activeTextEditor;
-						if (activeEditor && !activeEditor.selection.isEmpty) {
-							codeToReprex = activeEditor.document.getText(activeEditor.selection);
-						} else {
-							vscode.window.showErrorMessage('No text selected');
-							return;
-						}
-					} else if (source === 'file') {
-						const activeEditor = vscode.window.activeTextEditor;
-						if (activeEditor) {
-							codeToReprex = activeEditor.document.getText();
-						} else {
-							vscode.window.showErrorMessage('No active file');
-							return;
-						}
-					} else if (source === 'input') {
-						codeToReprex = text;
-					}
-					
-					if (codeToReprex.trim()) {
-						await runReprexOnTextWithVenue(codeToReprex, venue);
-					} else {
-						vscode.window.showErrorMessage('No R code to reprex');
-					}
-					break;
-			}
-		});
-	}
-	
-	// Create HTML content for the addin interface
-	const html = `<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Reprex Addin</title>
-		<style>
-			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-				padding: 20px;
-				line-height: 1.6;
-				color: var(--vscode-editor-foreground);
-				background-color: var(--vscode-editor-background);
-			}
-			h2 {
-				color: var(--vscode-editor-foreground);
-				border-bottom: 2px solid var(--vscode-panel-border);
-				padding-bottom: 10px;
-				margin-bottom: 20px;
-			}
-			.form-group {
-				margin-bottom: 20px;
-			}
-			label {
-				display: block;
-				margin-bottom: 5px;
-				font-weight: bold;
-				color: var(--vscode-editor-foreground);
-			}
-			input, select, textarea {
-				width: 100%;
-				padding: 8px;
-				border: 1px solid var(--vscode-panel-border);
-				border-radius: 4px;
-				background-color: var(--vscode-input-background);
-				color: var(--vscode-input-foreground);
-				font-family: inherit;
-			}
-			textarea {
-				height: 100px;
-				resize: vertical;
-				font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
-			}
-			button {
-				background-color: var(--vscode-button-background);
-				color: var(--vscode-button-foreground);
-				border: none;
-				padding: 10px 20px;
-				border-radius: 4px;
-				cursor: pointer;
-				font-size: 14px;
-				margin-right: 10px;
-			}
-			button:hover {
-				background-color: var(--vscode-button-hoverBackground);
-			}
-			.radio-group {
-				display: flex;
-				flex-direction: column;
-				gap: 8px;
-			}
-			.radio-item {
-				display: flex;
-				align-items: center;
-				gap: 8px;
-			}
-			input[type="radio"] {
-				width: auto;
-			}
-			.description {
-				font-size: 12px;
-				color: var(--vscode-descriptionForeground);
-				margin-top: 5px;
-			}
-		</style>
-	</head>
-	<body>
-		<h2>Reprex Addin</h2>
-		
-		<div class="form-group">
-			<label>Source of reprex code:</label>
-			<div class="radio-group">
-				<div class="radio-item">
-					<input type="radio" id="clipboard" name="source" value="clipboard" checked>
-					<label for="clipboard">Clipboard</label>
-				</div>
-				<div class="radio-item">
-					<input type="radio" id="selection" name="source" value="selection">
-					<label for="selection">Current selection</label>
-				</div>
-				<div class="radio-item">
-					<input type="radio" id="file" name="source" value="file">
-					<label for="file">Active file</label>
-				</div>
-				<div class="radio-item">
-					<input type="radio" id="input" name="source" value="input">
-					<label for="input">Text input below</label>
-				</div>
-			</div>
-		</div>
-		
-		<div class="form-group">
-			<label for="codeInput">R code (only used if "Text input below" is selected):</label>
-			<textarea id="codeInput" placeholder="Enter your R code here..."></textarea>
-		</div>
-		
-		<div class="form-group">
-			<label for="venue">Output venue:</label>
-			<select id="venue">
-				<option value="gh">GitHub (gh) - Default</option>
-				<option value="r">R script (r)</option>
-				<option value="slack">Slack (slack)</option>
-				<option value="so">Stack Overflow (so)</option>
-				<option value="html">HTML fragment (html)</option>
-				<option value="rtf">Rich Text Format (rtf)</option>
-			</select>
-			<div class="description">Choose the format for your reprex output</div>
-		</div>
-		
-		<button onclick="runReprex()">Render reprex</button>
-		
-		<script>
-			const vscode = acquireVsCodeApi();
-			
-			function runReprex() {
-				const source = document.querySelector('input[name="source"]:checked').value;
-				const text = document.getElementById('codeInput').value;
-				const venue = document.getElementById('venue').value;
-				
-				vscode.postMessage({
-					command: 'runReprex',
-					source: source,
-					text: text,
-					venue: venue
-				});
-			}
-		</script>
-	</body>
-	</html>`;
-	
-	addinPanel.webview.html = html;
-}
-
-async function runReprexOnTextWithVenue(text: string, venue: string = 'gh') {
-	// Similar to runReprexOnText but with venue parameter
-	const tempDir = os.tmpdir();
-	const tempInputFile = path.join(tempDir, `reprex_input_${Date.now()}.R`);
-	const tempOutputFile = path.join(tempDir, `reprex_output_${Date.now()}.md`);
-	
-	try {
-		fs.writeFileSync(tempInputFile, text, 'utf8');
-		
-		const command = `
-			output_file <- '${tempOutputFile}';
-			reprex_result <- reprex::reprex(input = '${tempInputFile}', venue = '${venue}', html_preview = FALSE);
-			tryCatch({
-				clipr::write_clip(reprex_result, allow_non_interactive = TRUE)
-			}, error = function(e) {
-				message('Clipboard copy skipped: ', e$message)
-			});
-			writeLines(reprex_result, output_file);
-			cat('REPREX_SUCCESS')
-		`.replace(/\n/g, ' ').replace(/\t/g, ' ');
-		
-		vscode.window.showInformationMessage('Running reprex...');
-		
-		const { stdout, stderr } = await execAsync(`CLIPR_ALLOW=TRUE Rscript -e "${command}"`);
-		
-		if (stdout.includes('REPREX_SUCCESS')) {
-			let reprexOutput = '';
-			if (fs.existsSync(tempOutputFile)) {
-				reprexOutput = fs.readFileSync(tempOutputFile, 'utf8');
-			}
-			
-			showReprexOutput(reprexOutput, text);
-			
-			try {
-				await vscode.env.clipboard.writeText(reprexOutput);
-				vscode.window.showInformationMessage('Reprex completed! Output shown in viewer and copied to clipboard.');
-			} catch (clipboardError) {
-				vscode.window.showInformationMessage('Reprex completed! Output shown in viewer. Use copy button to copy to clipboard.');
-			}
-		} else if (stderr && !stderr.includes('Rendering reprex')) {
-			vscode.window.showErrorMessage(`Reprex Error: ${stderr}`);
-		}
-		
-		if (fs.existsSync(tempInputFile)) {
-			fs.unlinkSync(tempInputFile);
-		}
-		if (fs.existsSync(tempOutputFile)) {
-			fs.unlinkSync(tempOutputFile);
-		}
-		
-	} catch (error) {
-		if (fs.existsSync(tempInputFile)) {
-			fs.unlinkSync(tempInputFile);
-		}
-		if (fs.existsSync(tempOutputFile)) {
-			fs.unlinkSync(tempOutputFile);
-		}
-		vscode.window.showErrorMessage(`Failed to run reprex: ${error}`);
-	}
-}
 
 export function deactivate() {}
