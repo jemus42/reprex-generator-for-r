@@ -1,6 +1,6 @@
 # Reprex Generator for R Extension - Common Tasks
 
-# Extension version (should match package.json)
+# Extension version extracted from package.json
 VERSION := `jq -r < package.json .version`
 
 # Install dependencies
@@ -15,16 +15,12 @@ compile:
 watch:
 	pnpm run watch
 
-# Package the extension for distribution
-package:
-	pnpm run package
-
 # Bundle the extension into .vsix file
 bundle:
 	vsce package
 
 # Install the extension locally from .vsix file
-install-local: bundle
+install-extension: bundle
 	code --install-extension reprex-generator-for-r-{{VERSION}}.vsix
 	positron --install-extension reprex-generator-for-r-{{VERSION}}.vsix
 
@@ -48,9 +44,19 @@ lint:
 test:
 	pnpm run test
 
-# Full development cycle: install deps, compile, and bundle
-dev: install compile bundle
-
 # Uninstall the extension
 uninstall:
 	code --uninstall-extension reprex-generator-for-r
+	positron --uninstall-extension reprex-generator-for-r
+
+# Publish to OpenVSX (requires OVSX_TOKEN environment variable)
+publish-ovsx: bundle
+	ovsx publish reprex-generator-for-r-{{VERSION}}.vsix -p $OVSX_TOKEN
+
+# Publish to VS Code Marketplace (requires vsce login)
+publish-vscode: bundle
+	vsce publish
+
+# Dry run to check what would be published
+publish-check: bundle
+	ovsx ls-files reprex-generator-for-r-{{VERSION}}.vsix

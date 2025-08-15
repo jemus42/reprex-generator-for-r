@@ -1,19 +1,22 @@
-# Reprex Generator for R
+# Positron Reprex Generator for R
 
-A VS Code/Positron extension that integrates the R `reprex` package to create reproducible examples directly from your editor.
+A Positron (/ VS Code) extension that integrates the [`{reprex}`](https://reprex.tidyverse.org/) package to create reproducible examples directly from your editor.
 
 ## Features
 
-This extension provides three commands accessible via the Command Palette:
+The extension provides four commands accessible via the Command Palette:
 
-- **Reprex: Start Addin** - Launches the reprex addin interface (`reprex::reprex_addin()`)
-- **Reprex: Active File** - Creates a reproducible example from the entire active file
-- **Reprex: Selected Code** - Creates a reproducible example from selected text
+- **Reprex: Start Addin** - Launches the reprex addin interface by running `reprex::reprex_addin()` in the active console
+- **Reprex: Active File** - Creates a reprex from the entire active file and previews it
+- **Reprex: Selected Code** - Creates a reprex from selected text and previews it
+- **Reprex: From Clipboard** - Creates a reprex from the clipboard contents
+
+Each command will try to put the rendered reprex in the clipboard via [`{clipr}`](https://matthewlincoln.net/clipr/).
 
 ## Requirements
 
-- R must be installed and available in your system PATH
-- The `reprex` R package must be installed (`install.packages("reprex")`)
+- R must be installed and available in `$PATH`
+- The `{reprex}` package must be installed (`install.packages("reprex")` / `pak::pak("reprex")`)
 
 ## Usage
 
@@ -24,31 +27,23 @@ This extension provides three commands accessible via the Command Palette:
    - For active file: Make sure an R file is open and active
    - For the addin: This will open the reprex addin interface
 
-The reprex output will be copied to your clipboard automatically (default reprex behavior).
+The reprex output will be copied to your clipboard automatically.
 
 ## Installation
 
 ### From VSIX file
 
 1. Download the `.vsix` file from the releases
-2. Run `code --install-extension reprex-generator-for-r-0.0.1.vsix`
+2. For Positron, run `positron --install-extension reprex-generator-for-r-XYZ.vsix`
+   1. (For VSCode, use `code` rather than `positron`)
 
 ### For Development
 
 1. Clone this repository
-2. Run `pnpm install` to install dependencies
-3. Run `just install-local` to build and install locally
+2. Run `just install` to install stuff via `pnpm`
+3. Run `just install-extension` to build and install locally for both Positron and VSCode
 
 ## Known Issues
 
-- The extension requires R to be available in the system PATH
-- Error messages from R are displayed in VS Code notifications
-
-## Release Notes
-
-### 0.0.1
-
-Initial release with basic reprex functionality:
-- Start reprex addin
-- Create reprex from active file
-- Create reprex from selected code
+- Positron is prioritized, so you might run into wonkyness on VSCode
+- I'm not sure how reliable the active console detection is to paste the `reprex_addin()` command and it blocks a console

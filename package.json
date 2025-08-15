@@ -2,14 +2,14 @@
   "name": "reprex-generator-for-r",
   "displayName": "Reprex Generator (for R)",
   "description": "Creates reproducible examples from active file or selected lines using {reprex}",
-  "version": "0.0.11",
+  "version": "0.0.13",
   "publisher": "jemus42",
   "author": {
     "name": "Lukas Burk",
     "url": "https://lukasburk.de"
   },
   "license": "MIT",
-  "homepage": "https://codeberg.org/lksbrk/reprex-generator-for-r#readme",
+  "homepage": "https://codeberg.org/lksbrk/reprex-generator-for-r",
   "bugs": {
     "url": "https://codeberg.org/lksbrk/reprex-generator-for-r/issues"
   },
@@ -30,8 +30,14 @@
     "vscode": "^1.102.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages",
+    "Data Science"
   ],
+  "icon": "icon.svg",
+  "galleryBanner": {
+    "color": "#1e3a5f",
+    "theme": "dark"
+  },
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
