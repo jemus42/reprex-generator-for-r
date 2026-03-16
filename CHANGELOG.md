@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0] - 2025-03-16
+
+### Fixed
+
+- All commands are now always visible in the command palette. Previously,
+  `enablement` clauses caused Positron to hide commands like "Selected Code"
+  when no selection was active. Validation is handled in the command handlers
+  instead.
+
 ## [0.1.0] - 2025-03-16
 
 Initial public release.
