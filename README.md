@@ -1,49 +1,97 @@
-# Positron Reprex Generator for R
+# Reprex Generator for R
 
-A Positron (/ VS Code) extension that integrates the [`{reprex}`](https://reprex.tidyverse.org/) package to create reproducible examples directly from your editor.
+A [Positron](https://positron.posit.co/) / VS Code extension that brings the
+[`{reprex}`](https://reprex.tidyverse.org/) package to your editor. If you're an
+R user who relies on `reprex::reprex()` or the RStudio addin to create
+reproducible examples for GitHub issues, Stack Overflow, or Slack, this extension
+lets you do the same thing without leaving Positron or VS Code.
 
 ## Features
 
-The extension provides four commands accessible via the Command Palette:
+All commands are available via the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
+under the **Reprex** category:
 
-- **Reprex: Start Addin** - Launches the reprex addin interface by running `reprex::reprex_addin()` in the active console
-- **Reprex: Active File** - Creates a reprex from the entire active file and previews it
-- **Reprex: Selected Code** - Creates a reprex from selected text and previews it
-- **Reprex: From Clipboard** - Creates a reprex from the clipboard contents
+| Command | Description |
+|---------|-------------|
+| **Reprex: Start Addin** | Launch the interactive `reprex_addin()` in your R console |
+| **Reprex: Active File** | Create a reprex from the entire active file |
+| **Reprex: Selected Code** | Create a reprex from the current selection |
 
-Each command will try to put the rendered reprex in the clipboard via [`{clipr}`](https://matthewlincoln.net/clipr/).
+The rendered reprex output is:
+
+- Displayed in a side panel with a copy button
+- Automatically copied to your clipboard (when possible)
 
 ## Requirements
 
-- R must be installed and available in `$PATH`
-- The `{reprex}` package must be installed (`install.packages("reprex")` / `pak::pak("reprex")`)
-
-## Usage
-
-1. Open the Command Palette (`Cmd+Shift+P` on macOS or `Ctrl+Shift+P` on Windows/Linux)
-2. Type "Reprex" to see available commands
-3. Select the command you want to run:
-   - For selected code: First select the R code you want to create a reprex from
-   - For active file: Make sure an R file is open and active
-   - For the addin: This will open the reprex addin interface
-
-The reprex output will be copied to your clipboard automatically.
+- **R** must be installed and `Rscript` must be available on your `PATH`
+- The **[reprex](https://reprex.tidyverse.org/)** package must be installed:
+  ```r
+  install.packages("reprex")
+  # or
+  pak::pak("reprex")
+  ```
 
 ## Installation
 
-### From VSIX file
+### From Open VSX / Extension Marketplace
 
-1. Download the `.vsix` file from the releases
-2. For Positron, run `positron --install-extension reprex-generator-for-r-XYZ.vsix`
-   1. (For VSCode, use `code` rather than `positron`)
+Search for "Reprex Generator" in the extensions panel, or install from the
+command line:
 
-### For Development
+```sh
+# Positron
+positron --install-extension jemus42.reprex-generator-for-r
 
-1. Clone this repository
-2. Run `just install` to install stuff via `pnpm`
-3. Run `just install-extension` to build and install locally for both Positron and VSCode
+# VS Code
+code --install-extension jemus42.reprex-generator-for-r
+```
+
+### From .vsix file
+
+Download the `.vsix` from the
+[releases](https://codeberg.org/lksbrk/reprex-generator-for-r/releases) and
+install it:
+
+```sh
+positron --install-extension reprex-generator-for-r-0.1.0.vsix
+```
 
 ## Known Issues
 
-- Positron is prioritized, so you might run into wonkyness on VSCode
-- I'm not sure how reliable the active console detection is to paste the `reprex_addin()` command and it blocks a console
+- The extension prioritizes Positron's console API. On plain VS Code it falls
+  back to the [vscode-R](https://github.com/REditorSupport/vscode-R) extension
+  or clipboard-based workarounds.
+- The "Start Addin" command runs `reprex_addin()` which blocks the R console
+  until the addin is closed.
+
+## Development
+
+Prerequisites: [Node.js](https://nodejs.org/), [pnpm](https://pnpm.io/),
+[just](https://github.com/casey/just).
+
+```sh
+# Install dependencies
+just install
+
+# Compile (webpack)
+just compile
+
+# Watch mode for development
+just watch
+
+# Bundle into .vsix and install locally (Positron + VS Code)
+just install-extension
+
+# Lint
+just lint
+
+# Run tests
+just test
+```
+
+See the `Justfile` for all available tasks.
+
+## License
+
+[MIT](LICENSE.md)

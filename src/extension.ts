@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -10,8 +10,6 @@ const execAsync = promisify(exec);
 let reprexPanel: vscode.WebviewPanel | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Reprex Generator for R extension is now active!');
-
 	const reprexAddin = vscode.commands.registerCommand('reprex-generator-for-r.reprexAddin', async () => {
 		vscode.window.showInformationMessage('Starting reprex addin...');
 
@@ -22,11 +20,11 @@ export function activate(context: vscode.ExtensionContext) {
 				code: 'reprex::reprex_addin()',
 				focus: true
 			});
-		} catch (positronError) {
+		} catch {
 			try {
 				// Fallback: try R extension command if available
 				await vscode.commands.executeCommand('r.runSelection', 'reprex::reprex_addin()');
-			} catch (rExtensionError) {
+			} catch {
 				// Final fallback: copy to clipboard and ask user to run manually
 				await vscode.env.clipboard.writeText('reprex::reprex_addin()');
 				const selection = await vscode.window.showInformationMessage(
@@ -36,16 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 				);
 
 				if (selection === 'Use Alternative') {
-					const altSelection = await vscode.window.showQuickPick([
-						'Use Selected Code',
-						'Use Clipboard'
-					], { placeHolder: 'Choose alternative reprex method' });
-
-					if (altSelection === 'Use Selected Code') {
-						await vscode.commands.executeCommand('reprex-generator-for-r.reprexSelection');
-					} else if (altSelection === 'Use Clipboard') {
-						await vscode.commands.executeCommand('reprex-generator-for-r.reprexClipboard');
-					}
+					await vscode.commands.executeCommand('reprex-generator-for-r.reprexSelection');
 				}
 			}
 		}
@@ -58,8 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		const document = activeEditor.document;
-		const text = document.getText();
+		const text = activeEditor.document.getText();
 
 		if (!text.trim()) {
 			vscode.window.showErrorMessage('Active file is empty');
@@ -76,8 +64,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		const selection = activeEditor.selection;
-		const selectedText = activeEditor.document.getText(selection);
+		const selectedText = activeEditor.document.getText(activeEditor.selection);
 
 		if (!selectedText.trim()) {
 			vscode.window.showErrorMessage('No text selected');
@@ -87,131 +74,65 @@ export function activate(context: vscode.ExtensionContext) {
 		await runReprexOnText(selectedText);
 	});
 
-	// Alternative: reprex from clipboard (useful if selection method has issues)
-	const reprexClipboard = vscode.commands.registerCommand('reprex-generator-for-r.reprexClipboard', async () => {
-		try {
-			// Copy current selection to clipboard first
-			await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
-
-			// Small delay to ensure clipboard is updated
-			await new Promise(resolve => setTimeout(resolve, 100));
-
-			// Run reprex on clipboard content
-			const command = `reprex::reprex(venue = 'gh', html_preview = FALSE)`;
-			vscode.window.showInformationMessage('Running reprex on clipboard content...');
-
-			const { stdout, stderr } = await execAsync(`CLIPR_ALLOW=TRUE Rscript -e "${command}"`);
-
-			if (stderr && !stderr.includes('Rendering reprex')) {
-				vscode.window.showErrorMessage(`Reprex Error: ${stderr}`);
-			} else {
-				vscode.window.showInformationMessage('Reprex completed! Output copied to clipboard.');
-			}
-
-			if (stdout) {
-				console.log('Reprex output:', stdout);
-			}
-		} catch (error) {
-			vscode.window.showErrorMessage(`Failed to run reprex: ${error}`);
-		}
-	});
-
-	context.subscriptions.push(reprexAddin, reprexFile, reprexSelection, reprexClipboard);
-}
-
-async function runRCommand(command: string) {
-	try {
-		vscode.window.showInformationMessage(`Running: ${command}`);
-		// Set CLIPR_ALLOW to allow clipboard operations in non-interactive mode
-		const { stdout, stderr } = await execAsync(`CLIPR_ALLOW=TRUE Rscript -e "${command}"`);
-
-		if (stderr) {
-			vscode.window.showErrorMessage(`R Error: ${stderr}`);
-		}
-		if (stdout) {
-			console.log(stdout);
-		}
-	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to run R command: ${error}`);
-	}
+	context.subscriptions.push(reprexAddin, reprexFile, reprexSelection);
 }
 
 async function runReprexOnText(text: string) {
-	// Create temporary files for input and output
 	const tempDir = os.tmpdir();
 	const tempInputFile = path.join(tempDir, `reprex_input_${Date.now()}.R`);
 	const tempOutputFile = path.join(tempDir, `reprex_output_${Date.now()}.md`);
 
 	try {
-		// Write the selected text to a temporary file
-		fs.writeFileSync(tempInputFile, text, 'utf8');
+		await fs.writeFile(tempInputFile, text, 'utf8');
 
 		// Run reprex with the temp file as input
-		// We try to copy to clipboard if possible, but it may fail in non-interactive mode
+		// Try to copy to clipboard via clipr, but it may fail in non-interactive mode
+		const escapedInput = tempInputFile.replace(/'/g, "\\'");
+		const escapedOutput = tempOutputFile.replace(/'/g, "\\'");
 		const command = `
-			output_file <- '${tempOutputFile}';
-			reprex_result <- reprex::reprex(input = '${tempInputFile}', venue = 'gh', html_preview = FALSE);
+			reprex_result <- reprex::reprex(input = '${escapedInput}', venue = 'gh', html_preview = FALSE);
 			tryCatch({
 				clipr::write_clip(reprex_result, allow_non_interactive = TRUE)
 			}, error = function(e) {
 				message('Clipboard copy skipped: ', e$message)
 			});
-			writeLines(reprex_result, output_file);
+			writeLines(reprex_result, '${escapedOutput}');
 			cat('REPREX_SUCCESS')
 		`.replace(/\n/g, ' ').replace(/\t/g, ' ');
 
 		vscode.window.showInformationMessage('Running reprex...');
 
-		// Execute the R command with environment variable to allow clipboard access
 		const { stdout, stderr } = await execAsync(`CLIPR_ALLOW=TRUE Rscript -e "${command}"`);
 
-		// Check if reprex was successful
 		if (stdout.includes('REPREX_SUCCESS')) {
-			// Read the output file
 			let reprexOutput = '';
-			if (fs.existsSync(tempOutputFile)) {
-				reprexOutput = fs.readFileSync(tempOutputFile, 'utf8');
+			try {
+				reprexOutput = await fs.readFile(tempOutputFile, 'utf8');
+			} catch {
+				// Output file may not exist if reprex produced no output
 			}
 
-			// Show the output in a webview
-			showReprexOutput(reprexOutput, text);
+			showReprexOutput(reprexOutput);
 
-			// Try to copy to clipboard using VS Code API as fallback
 			try {
 				await vscode.env.clipboard.writeText(reprexOutput);
 				vscode.window.showInformationMessage('Reprex completed! Output shown in viewer and copied to clipboard.');
-			} catch (clipboardError) {
+			} catch {
 				vscode.window.showInformationMessage('Reprex completed! Output shown in viewer. Use copy button to copy to clipboard.');
 			}
 		} else if (stderr && !stderr.includes('Rendering reprex')) {
 			vscode.window.showErrorMessage(`Reprex Error: ${stderr}`);
 		}
-
-		// Clean up temp files
-		if (fs.existsSync(tempInputFile)) {
-			fs.unlinkSync(tempInputFile);
-		}
-		if (fs.existsSync(tempOutputFile)) {
-			fs.unlinkSync(tempOutputFile);
-		}
-
-		if (stdout && !stdout.includes('REPREX_SUCCESS')) {
-			console.log('Reprex output:', stdout);
-		}
 	} catch (error) {
-		// Clean up temp files on error
-		if (fs.existsSync(tempInputFile)) {
-			fs.unlinkSync(tempInputFile);
-		}
-		if (fs.existsSync(tempOutputFile)) {
-			fs.unlinkSync(tempOutputFile);
-		}
 		vscode.window.showErrorMessage(`Failed to run reprex: ${error}`);
+	} finally {
+		// Clean up temp files
+		await fs.unlink(tempInputFile).catch(() => {});
+		await fs.unlink(tempOutputFile).catch(() => {});
 	}
 }
 
-function showReprexOutput(reprexOutput: string, originalCode: string) {
-	// Create or reveal the webview panel
+function showReprexOutput(reprexOutput: string) {
 	if (reprexPanel) {
 		reprexPanel.reveal(vscode.ViewColumn.Two);
 	} else {
@@ -219,20 +140,15 @@ function showReprexOutput(reprexOutput: string, originalCode: string) {
 			'reprexOutput',
 			'Reprex Output',
 			vscode.ViewColumn.Two,
-			{
-				enableScripts: true,
-				retainContextWhenHidden: true
-			}
+			{ enableScripts: true }
 		);
 
-		// Reset when the panel is closed
 		reprexPanel.onDidDispose(() => {
 			reprexPanel = undefined;
 		});
 	}
 
-	// Create HTML content with the reprex output
-	const html = `<!DOCTYPE html>
+	reprexPanel.webview.html = `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
@@ -288,34 +204,31 @@ function showReprexOutput(reprexOutput: string, originalCode: string) {
 				margin-top: 10px;
 				display: none;
 			}
-			.section {
-				margin-bottom: 30px;
-			}
 		</style>
 	</head>
 	<body>
 		<h2>Reprex Output</h2>
-		
+
 		<div class="button-container">
 			<button onclick="copyToClipboard()">Copy to Clipboard</button>
 			<span class="success-message" id="copyMessage">Copied!</span>
 		</div>
-		
-		<div class="section">
+
+		<div>
 			<h3>Rendered Reprex (Markdown)</h3>
 			<pre id="reprexOutput">${escapeHtml(reprexOutput)}</pre>
 		</div>
-				
+
 		<script>
 			const vscode = acquireVsCodeApi();
-			
+
 			function copyToClipboard() {
 				const text = document.getElementById('reprexOutput').textContent;
 				navigator.clipboard.writeText(text).then(() => {
 					showCopyMessage();
 				});
 			}
-			
+
 			function showCopyMessage() {
 				const message = document.getElementById('copyMessage');
 				message.style.display = 'inline';
@@ -326,12 +239,10 @@ function showReprexOutput(reprexOutput: string, originalCode: string) {
 		</script>
 	</body>
 	</html>`;
-
-	reprexPanel.webview.html = html;
 }
 
-function escapeHtml(text: string): string {
-	const map: { [key: string]: string } = {
+export function escapeHtml(text: string): string {
+	const map: Record<string, string> = {
 		'&': '&amp;',
 		'<': '&lt;',
 		'>': '&gt;',
@@ -341,5 +252,6 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-
-export function deactivate() { }
+export function deactivate() {
+	reprexPanel?.dispose();
+}

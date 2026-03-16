@@ -9,9 +9,9 @@ webpack.config.js
 vsc-extension-quickstart.md
 **/tsconfig.json
 **/eslint.config.mjs
+**/.vscode-test.*
 **/*.map
 **/*.ts
-**/.vscode-test.*
 .claude/**
 CLAUDE.md
 Justfile
@@ -23,4 +23,6 @@ yarn.lock
 test/**
 .github/**
 demo.R
+icon.svg
+TODO.md
 .env

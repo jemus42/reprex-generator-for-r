@@ -2,7 +2,7 @@
   "name": "reprex-generator-for-r",
   "displayName": "Reprex Generator (for R)",
   "description": "Creates reproducible examples from active file or selected lines using {reprex}",
-  "version": "0.0.13",
+  "version": "0.1.0",
   "publisher": "jemus42",
   "author": {
     "name": "Lukas Burk",
@@ -44,19 +44,20 @@
     "commands": [
       {
         "command": "reprex-generator-for-r.reprexAddin",
-        "title": "Reprex: Start Addin"
+        "title": "Start Addin",
+        "category": "Reprex"
       },
       {
         "command": "reprex-generator-for-r.reprexFile",
-        "title": "Reprex: Active File"
+        "title": "Active File",
+        "category": "Reprex",
+        "enablement": "editorIsOpen"
       },
       {
         "command": "reprex-generator-for-r.reprexSelection",
-        "title": "Reprex: Selected Code"
-      },
-      {
-        "command": "reprex-generator-for-r.reprexClipboard",
-        "title": "Reprex: From Clipboard"
+        "title": "Selected Code",
+        "category": "Reprex",
+        "enablement": "editorHasSelection"
       }
     ]
   },
