@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2025-03-16
+
+### Added
+
+- Configurable output venue via the `reprex.venue` setting. Supports `gh`
+  (default), `slack`, `r`, `html`, `so`, and `ds`. Set it in Settings under
+  "Reprex".
+
 ## [0.2.0] - 2025-03-16
 
 ### Fixed

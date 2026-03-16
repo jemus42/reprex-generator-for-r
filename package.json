@@ -2,7 +2,7 @@
   "name": "reprex-generator-for-r",
   "displayName": "Reprex Generator (for R)",
   "description": "Creates reproducible examples from active file or selected lines using {reprex}",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "jemus42",
   "author": {
     "name": "Lukas Burk",
@@ -41,6 +41,25 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Reprex",
+      "properties": {
+        "reprex.venue": {
+          "type": "string",
+          "default": "gh",
+          "enum": ["gh", "slack", "r", "html", "so", "ds"],
+          "enumDescriptions": [
+            "GitHub-Flavored Markdown (default)",
+            "Slack message",
+            "Runnable R script with commented output",
+            "HTML fragment",
+            "Stack Overflow (alias for gh)",
+            "Discourse (alias for gh)"
+          ],
+          "description": "Default output format for reprex"
+        }
+      }
+    },
     "commands": [
       {
         "command": "reprex-generator-for-r.reprexAddin",

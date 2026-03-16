@@ -87,10 +87,11 @@ async function runReprexOnText(text: string) {
 
 		// Run reprex with the temp file as input
 		// Try to copy to clipboard via clipr, but it may fail in non-interactive mode
+		const venue = vscode.workspace.getConfiguration('reprex').get<string>('venue', 'gh');
 		const escapedInput = tempInputFile.replace(/'/g, "\\'");
 		const escapedOutput = tempOutputFile.replace(/'/g, "\\'");
 		const command = `
-			reprex_result <- reprex::reprex(input = '${escapedInput}', venue = 'gh', html_preview = FALSE);
+			reprex_result <- reprex::reprex(input = '${escapedInput}', venue = '${venue}', html_preview = FALSE);
 			tryCatch({
 				clipr::write_clip(reprex_result, allow_non_interactive = TRUE)
 			}, error = function(e) {
