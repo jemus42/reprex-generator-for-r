@@ -1,7 +1,12 @@
+set dotenv-load
+
 # Reprex Generator for R Extension - Common Tasks
 
 # Extension version extracted from package.json
 VERSION := `jq -r < package.json .version`
+
+# Base URL for resolving relative links in README (vsce only auto-detects GitHub/GitLab)
+REPO_URL := "https://codeberg.org/lksbrk/reprex-generator-for-r/raw/branch/main/"
 
 # Install dependencies
 install:
@@ -17,7 +22,7 @@ watch:
 
 # Bundle the extension into .vsix file
 bundle:
-	vsce package
+	vsce package --baseContentUrl {{REPO_URL}} --baseImagesUrl {{REPO_URL}}
 
 # Install the extension locally from .vsix file
 install-extension: bundle
@@ -58,5 +63,5 @@ publish-vscode: bundle
 	vsce publish
 
 # Dry run to check what would be published
-publish-check: bundle
-	ovsx ls-files reprex-generator-for-r-{{VERSION}}.vsix
+publish-check:
+	vsce ls
