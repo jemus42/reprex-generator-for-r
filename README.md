@@ -34,10 +34,9 @@ The rendered reprex output is:
 
 ## Installation
 
-### From Open VSX / Extension Marketplace
-
-Search for "Reprex Generator" in the extensions panel, or install from the
-command line:
+Install from [Open VSX](https://open-vsx.org/extension/jemus42/reprex-generator-for-r)
+by searching for "Reprex Generator" in the extensions panel, or from the command
+line:
 
 ```sh
 # Positron
@@ -45,16 +44,6 @@ positron --install-extension jemus42.reprex-generator-for-r
 
 # VS Code
 code --install-extension jemus42.reprex-generator-for-r
-```
-
-### From .vsix file
-
-Download the `.vsix` from the
-[releases](https://codeberg.org/lksbrk/reprex-generator-for-r/releases) and
-install it:
-
-```sh
-positron --install-extension reprex-generator-for-r-0.1.0.vsix
 ```
 
 ## Known Issues
