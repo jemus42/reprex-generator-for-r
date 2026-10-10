@@ -27,6 +27,11 @@ if (!requireNamespace("reprex", quietly = TRUE)) {
   message("REPREX_NOT_INSTALLED")
   quit(status = 3)
 }
+# Without pandoc, reprex fails with a misleading "appears to crash R".
+if (!rmarkdown::pandoc_available()) {
+  message("PANDOC_NOT_FOUND")
+  quit(status = 4)
+}
 wd <- if (nzchar(args[3])) args[3] else NULL
 run_dir <- args[5]
 # reprex ignores \`wd\` for file input; a trailing "" keeps the lines from being read as a path.
@@ -202,8 +207,17 @@ export function lastStatusLine(chunk: string): string | undefined {
 	return cleanLines(chunk).filter(l => !/^['"\/]|clipr/i.test(l)).pop();
 }
 
+export const PANDOC_MISSING_MESSAGE =
+	'Pandoc was not found, and {reprex} needs it. Install pandoc (https://pandoc.org/installing.html) or set the RSTUDIO_PANDOC environment variable to the directory containing it.';
+
+// R's error message without the rlang backtrace that follows it.
 export function failureMessage(stderr: string, code: number | null): string {
 	const lines = cleanLines(stderr).filter(l => l !== 'Execution halted');
+	const start = lines.map(l => /^Error\b/.test(l)).lastIndexOf(true);
+	if (start >= 0) {
+		const end = lines.findIndex((l, i) => i > start && /^Backtrace:/.test(l));
+		return lines.slice(start, end < 0 ? undefined : end).join(' ');
+	}
 	return lines.slice(-2).join(' ') || `Rscript exited with code ${code}`;
 }
 
@@ -250,6 +264,8 @@ export async function renderReprex(text: string, opts: RenderOptions): Promise<R
 					resolve();
 				} else if (code === 3 && err.includes('REPREX_NOT_INSTALLED')) {
 					reject(new ReprexNotInstalledError());
+				} else if (code === 4 && err.includes('PANDOC_NOT_FOUND')) {
+					reject(new Error(PANDOC_MISSING_MESSAGE));
 				} else {
 					reject(new Error(failureMessage(err, code)));
 				}

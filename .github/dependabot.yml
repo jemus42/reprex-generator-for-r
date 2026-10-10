@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -11,3 +14,12 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # Must match engines.vscode; bump together by hand.
+      - dependency-name: "@types/vscode"
+      # Tracks the Node version shipped with VS Code / Positron.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint lags behind TypeScript majors.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]

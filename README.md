@@ -54,6 +54,7 @@ Saved figures older than `reprex.keepFiguresDays` (default 30) are removed autom
 ## Requirements
 
 - **R** must be installed. In Positron the extension uses the R interpreter you have selected; otherwise it uses `Rscript` from your `PATH`, or the path in `reprex.rscriptPath`
+- **[Pandoc](https://pandoc.org/installing.html)** must be on your `PATH`, or `RSTUDIO_PANDOC` must point to the directory containing it
 - The **[reprex](https://reprex.tidyverse.org/)** package must be installed:
   ```r
   install.packages("reprex")

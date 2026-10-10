@@ -296,6 +296,20 @@ suite('Helpers', () => {
 		assert.strictEqual(failureMessage('Error: bad venue\nExecution halted\n', 1), 'Error: bad venue');
 	});
 
+	test('failureMessage keeps the rlang message, not the backtrace', () => {
+		const stderr = [
+			'ℹ Rendering reprex...',
+			'Error in `reprex_render()`:',
+			'! This reprex appears to crash R.',
+			'Backtrace:',
+			'    ▆',
+			' 1. └─reprex::reprex(...)',
+			' 5.         └─rlang::abort(...)',
+			'Execution halted'
+		].join('\n');
+		assert.strictEqual(failureMessage(stderr, 1), 'Error in `reprex_render()`: This reprex appears to crash R.');
+	});
+
 	test('isVenue accepts known and rejects unknown venues', () => {
 		assert.ok(isVenue('slack'));
 		assert.ok(!isVenue("gh'; rm -rf /"));

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1] - 2026-10-10
+
+### Fixed
+
+- A missing pandoc now gives a clear message instead of reprex's misleading "This reprex appears to crash R".
+- Error notifications show R's actual error message instead of the last lines of the backtrace.
+
+
 ## [0.5.0] - 2026-10-10
 
 ### Added
