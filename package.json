@@ -9,6 +9,7 @@
     "url": "https://lukasburk.de"
   },
   "license": "MIT",
+  "packageManager": "pnpm@12.10.1",
   "homepage": "https://github.com/jemus42/reprex-generator-for-r",
   "bugs": {
     "url": "https://github.com/jemus42/reprex-generator-for-r/issues"
