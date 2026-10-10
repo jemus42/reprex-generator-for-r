@@ -1,5 +1,9 @@
 # Reprex Generator for R
 
+[![Open VSX version](https://img.shields.io/open-vsx/v/jemus42/reprex-generator-for-r)](https://open-vsx.org/extension/jemus42/reprex-generator-for-r)
+[![Open VSX downloads](https://img.shields.io/open-vsx/dt/jemus42/reprex-generator-for-r)](https://open-vsx.org/extension/jemus42/reprex-generator-for-r)
+[![License: MIT](https://img.shields.io/github/license/jemus42/reprex-generator-for-r)](LICENSE.md)
+
 A [Positron](https://positron.posit.co/) / VS Code extension that brings the
 [`{reprex}`](https://reprex.tidyverse.org/) package to your editor. If you're an
 R user who relies on `reprex::reprex()` or the RStudio addin to create
