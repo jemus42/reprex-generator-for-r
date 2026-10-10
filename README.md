@@ -7,6 +7,8 @@
 A [Positron](https://positron.posit.co/) / VS Code extension that brings the [`{reprex}`](https://reprex.tidyverse.org/) package to your editor. If you're an
 R user who relies on `reprex::reprex()` or the RStudio addin to create reproducible examples for GitHub issues, Stack Overflow, or Slack, this extension lets you do the same thing without leaving Positron or VS Code.
 
+![Running Reprex: Selected Code on demo.R in Positron: a progress notification appears, then the rendered reprex opens beside the code](docs/demo.gif)
+
 ## Features
 
 All commands are available via the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)

@@ -27,3 +27,4 @@ demo.R
 icon.svg
 TODO.md
 .env
+docs/**
