@@ -2,7 +2,7 @@
   "name": "reprex-generator-for-r",
   "displayName": "Reprex Generator (for R)",
   "description": "Creates reproducible examples from active file or selected lines using {reprex}",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "jemus42",
   "author": {
     "name": "Lukas Burk",
@@ -68,8 +68,9 @@
         },
         "reprex.rscriptPath": {
           "type": "string",
-          "default": "Rscript",
-          "markdownDescription": "Path to the `Rscript` executable. Defaults to `Rscript` from `PATH`."
+          "default": "",
+          "markdownDescription": "Path to the `Rscript` executable. When empty, Positron's selected R interpreter is used, falling back to `Rscript` from `PATH`.",
+          "scope": "machine"
         },
         "reprex.copyToClipboard": {
           "type": "boolean",
@@ -94,12 +95,75 @@
         "reprex.outputPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Directory used when `#reprex.outputLocation#` is `custom`. Supports `~` and `${workspaceFolder}`; relative paths are resolved against the workspace folder."
+          "markdownDescription": "Directory used when `#reprex.outputLocation#` is `custom`. Supports `~` and `${workspaceFolder}`; relative paths are resolved against the workspace folder.",
+          "scope": "machine"
         },
         "reprex.uploadPlots": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "Let `{reprex}` upload plots anonymously to imgur and link them in the output (its default for every venue except `r`). When disabled, plots stay local and the output refers to them by file path."
+        },
+        "reprex.sessionInfo": {
+          "type": "string",
+          "enum": [
+            "default",
+            "on",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Use reprex's default (and any `reprex.*` option set in `.Rprofile`)",
+            "Always on",
+            "Always off"
+          ],
+          "default": "default",
+          "markdownDescription": "Append `sessionInfo()` to the reprex."
+        },
+        "reprex.advertise": {
+          "type": "string",
+          "enum": [
+            "default",
+            "on",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Use reprex's default (and any `reprex.*` option set in `.Rprofile`)",
+            "Always on",
+            "Always off"
+          ],
+          "default": "default",
+          "markdownDescription": "Add the \"Created on … with reprex\" footer."
+        },
+        "reprex.style": {
+          "type": "string",
+          "enum": [
+            "default",
+            "on",
+            "off"
+          ],
+          "enumDescriptions": [
+            "Use reprex's default (and any `reprex.*` option set in `.Rprofile`)",
+            "Always on",
+            "Always off"
+          ],
+          "default": "default",
+          "markdownDescription": "Style the code with `{styler}` (must be installed)."
+        },
+        "reprex.comment": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Prefix for output lines. Empty uses reprex's default (`#>`)."
+        },
+        "reprex.timeoutSeconds": {
+          "type": "number",
+          "default": 600,
+          "minimum": 0,
+          "markdownDescription": "Stop a reprex that runs longer than this many seconds. `0` disables the limit."
+        },
+        "reprex.keepFiguresDays": {
+          "type": "number",
+          "default": 30,
+          "minimum": 0,
+          "markdownDescription": "Delete saved figure runs older than this many days from the output location. `0` keeps them forever. Only directories created by this extension are removed."
         }
       }
     },
@@ -127,6 +191,11 @@
       {
         "command": "reprex-generator-for-r.reprexSelectionVenue",
         "title": "Selected Code (Choose Venue)...",
+        "category": "Reprex"
+      },
+      {
+        "command": "reprex-generator-for-r.reprexClipboard",
+        "title": "Clipboard",
         "category": "Reprex"
       }
     ],
@@ -167,6 +236,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@posit-dev/positron": "^0.2.11",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.102.0",

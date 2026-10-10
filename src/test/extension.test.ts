@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { renderReprex, lastStatusLine, failureMessage, isVenue, resolveOutputBase } from '../reprex';
+import { renderReprex, lastStatusLine, failureMessage, isVenue, resolveOutputBase, siblingRscript, reprexOptionArgs, pruneOldRuns, ReprexNotInstalledError } from '../reprex';
 
 function rscriptAvailable(): boolean {
 	try {
@@ -169,6 +169,34 @@ suite('R Integration', () => {
 		assert.ok(output.includes('#> [1] TRUE'), `Got:\n${output}`);
 	});
 
+	(hasReprex ? test : test.skip)('applies reprex options', async function () {
+		this.timeout(30_000);
+		const { output } = await renderReprex('1 + 1\n', { venue: 'gh', reprexOptions: { advertise: false, comment: '##' } });
+		assert.ok(output.includes('## [1] 2'), output);
+		assert.ok(!output.includes('Created on'), output);
+	});
+
+	(hasReprex ? test : test.skip)('times out long runs', async function () {
+		this.timeout(30_000);
+		await assert.rejects(renderReprex('Sys.sleep(20)\n', { venue: 'gh', timeoutMs: 1500 }), { name: 'TimeoutError' });
+	});
+
+	(hasR ? test : test.skip)('rejects with ReprexNotInstalledError when reprex is missing', async function () {
+		this.timeout(30_000);
+		// An empty library path hides the installed package without touching the user's setup.
+		const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'rlib-'));
+		const saved = { ...process.env };
+		process.env.R_LIBS = empty;
+		process.env.R_LIBS_USER = empty;
+		process.env.R_LIBS_SITE = empty;
+		try {
+			await assert.rejects(renderReprex('1', { venue: 'gh' }), (e: Error) => e instanceof ReprexNotInstalledError);
+		} finally {
+			process.env = saved;
+			fs.rmSync(empty, { recursive: true, force: true });
+		}
+	});
+
 	(hasR ? test : test.skip)('rejects with a message when Rscript is missing', async () => {
 		await assert.rejects(renderReprex('1', { venue: 'gh', rscript: 'definitely-not-rscript' }), /ENOENT/);
 	});
@@ -211,6 +239,43 @@ suite('resolveOutputBase', () => {
 
 	test('custom: empty path falls back to user dir', () => {
 		assert.strictEqual(resolveOutputBase({ ...base, location: 'custom', customPath: ' ' }), '/home/me/.cache/reprex');
+	});
+});
+
+suite('Rscript and options helpers', () => {
+	test('siblingRscript sits next to R', () => {
+		assert.strictEqual(siblingRscript('/opt/R/4.5.0/bin/R', 'linux'), '/opt/R/4.5.0/bin/Rscript');
+		assert.strictEqual(siblingRscript('C:\\R\\bin\\R.exe', 'win32'), 'C:\\R\\bin\\Rscript.exe');
+	});
+
+	test('reprexOptionArgs leaves unset options empty', () => {
+		assert.deepStrictEqual(reprexOptionArgs(), ['', '', '', '']);
+		assert.deepStrictEqual(
+			reprexOptionArgs({ sessionInfo: true, advertise: false, comment: '##' }),
+			['true', 'false', '', '##']
+		);
+	});
+
+	test('pruneOldRuns removes only old, extension-named directories', async () => {
+		const base = fs.mkdtempSync(path.join(os.tmpdir(), 'prune-'));
+		try {
+			const old = '20200101000000-aaaaaa';
+			const fresh = '20990101000000-bbbbbb';
+			for (const d of [old, fresh, 'mine']) {
+				fs.mkdirSync(path.join(base, d));
+			}
+			const ancient = new Date('2020-01-01');
+			fs.utimesSync(path.join(base, old), ancient, ancient);
+			fs.utimesSync(path.join(base, 'mine'), ancient, ancient);
+
+			await pruneOldRuns(base, 30);
+			assert.deepStrictEqual(fs.readdirSync(base).sort(), [fresh, 'mine']);
+
+			await pruneOldRuns(base, 0);
+			assert.deepStrictEqual(fs.readdirSync(base).sort(), [fresh, 'mine'], '0 keeps everything');
+		} finally {
+			fs.rmSync(base, { recursive: true, force: true });
+		}
 	});
 });
 

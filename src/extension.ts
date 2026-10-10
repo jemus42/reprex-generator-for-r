@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { renderReprex, resolveOutputBase, OutputLocation, VENUES, VenueId, isVenue } from './reprex';
+import { renderReprex, resolveOutputBase, pruneOldRuns, OutputLocation, ReprexNotInstalledError, VENUES, VenueId, isVenue } from './reprex';
+import { inPositron, installReprexInConsole, positronRscript } from './positron';
 
 const LAST_VENUE_KEY = 'lastVenue';
 
@@ -54,13 +55,30 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const venue = pickVenue ? await promptVenue(context) : configuredVenue();
 			if (venue) {
-				await runReprex(text, venue, editor.document, log);
+				await runReprex(text, venue, editor.document.uri, log);
 			}
 		});
+
+	const reprexClipboard = vscode.commands.registerCommand('reprex-generator-for-r.reprexClipboard', async () => {
+		const text = await vscode.env.clipboard.readText();
+		if (!text.trim()) {
+			vscode.window.showErrorMessage('Clipboard is empty');
+			return;
+		}
+		// The clipboard is invisible, so show what is about to run as R code.
+		const lines = text.trim().split('\n');
+		const preview = lines.slice(0, 5).join('\n') + (lines.length > 5 ? `\n... (${lines.length - 5} more lines)` : '');
+		const run = await vscode.window.showWarningMessage('Run the clipboard contents as R code?', { modal: true, detail: preview }, 'Run');
+		if (run !== 'Run') {
+			return;
+		}
+		await runReprex(text, configuredVenue(), undefined, log);
+	});
 
 	context.subscriptions.push(
 		log,
 		reprexAddin,
+		reprexClipboard,
 		register('reprexFile', 'file', false),
 		register('reprexSelection', 'selection', false),
 		register('reprexFileVenue', 'file', true),
@@ -86,24 +104,42 @@ async function promptVenue(context: vscode.ExtensionContext): Promise<VenueId | 
 	return picked?.id;
 }
 
-function outputBase(document: vscode.TextDocument): string {
+function outputBase(uri: vscode.Uri | undefined): string {
 	const config = vscode.workspace.getConfiguration('reprex');
 	return resolveOutputBase({
 		location: config.get<OutputLocation>('outputLocation', 'user'),
 		customPath: config.get<string>('outputPath'),
-		workspaceFolder: (vscode.workspace.getWorkspaceFolder(document.uri) ?? vscode.workspace.workspaceFolders?.[0])?.uri.fsPath
+		workspaceFolder: ((uri && vscode.workspace.getWorkspaceFolder(uri)) ?? vscode.workspace.workspaceFolders?.[0])?.uri.fsPath
 	});
 }
 
-function workingDirectory(document: vscode.TextDocument): string | undefined {
-	if (document.uri.scheme === 'file') {
-		return path.dirname(document.uri.fsPath);
+function workingDirectory(uri: vscode.Uri | undefined): string | undefined {
+	if (uri?.scheme === 'file') {
+		return path.dirname(uri.fsPath);
 	}
 	return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 }
 
-async function runReprex(text: string, venue: VenueId, document: vscode.TextDocument, log: vscode.LogOutputChannel) {
+// Explicit setting wins, then Positron's selected R, then Rscript from PATH.
+async function resolveRscript(config: vscode.WorkspaceConfiguration): Promise<string> {
+	return config.get<string>('rscriptPath')?.trim() || await positronRscript() || 'Rscript';
+}
+
+// "default" leaves reprex's own default (and any option set in .Rprofile) untouched.
+function triState(config: vscode.WorkspaceConfiguration, key: string): boolean | undefined {
+	const value = config.get<string>(key, 'default');
+	return value === 'default' ? undefined : value === 'on';
+}
+
+async function runReprex(text: string, venue: VenueId, uri: vscode.Uri | undefined, log: vscode.LogOutputChannel) {
+	// Rscript sources .Rprofile files from the working directory, so never run in a workspace the user has not trusted.
+	if (!vscode.workspace.isTrusted) {
+		vscode.window.showErrorMessage('Reprex runs R code and is disabled in untrusted workspaces. Trust the workspace to continue.');
+		return;
+	}
 	const config = vscode.workspace.getConfiguration('reprex');
+	const base = outputBase(uri);
+	const rscript = await resolveRscript(config);
 
 	try {
 		const { output, figuresDir } = await vscode.window.withProgress(
@@ -115,16 +151,25 @@ async function runReprex(text: string, venue: VenueId, document: vscode.TextDocu
 
 				return renderReprex(text, {
 					venue,
-					rscript: config.get<string>('rscriptPath'),
-					wd: workingDirectory(document),
-					outputBase: outputBase(document),
+					rscript,
+					wd: workingDirectory(uri),
+					outputBase: base,
 					uploadPlots: config.get<boolean>('uploadPlots', true),
+					reprexOptions: {
+						sessionInfo: triState(config, 'sessionInfo'),
+						advertise: triState(config, 'advertise'),
+						style: triState(config, 'style'),
+						comment: config.get<string>('comment', '').trim() || undefined
+					},
+					timeoutMs: config.get<number>('timeoutSeconds', 0) * 1000,
 					signal: abort.signal,
 					onProgress: message => progress.report({ message }),
 					onLog: chunk => log.append(chunk)
 				});
 			}
 		);
+
+		pruneOldRuns(base, config.get<number>('keepFiguresDays', 30)).catch(() => {});
 
 		const language = VENUES.find(v => v.id === venue)?.language;
 		const doc = await vscode.workspace.openTextDocument({ content: output, language });
@@ -145,10 +190,25 @@ async function runReprex(text: string, venue: VenueId, document: vscode.TextDocu
 		if ((error as Error).name === 'AbortError') {
 			return;
 		}
+		if (error instanceof ReprexNotInstalledError) {
+			await offerReprexInstall();
+			return;
+		}
 		const choice = await vscode.window.showErrorMessage(`Reprex failed: ${(error as Error).message}`, 'Show Log');
 		if (choice === 'Show Log') {
 			log.show();
 		}
+	}
+}
+
+async function offerReprexInstall() {
+	const install = 'install.packages("reprex")';
+	const action = inPositron() ? 'Install reprex' : 'Copy install command';
+	const choice = await vscode.window.showErrorMessage('The R package {reprex} is not installed for the R used by this extension.', action);
+	if (choice === 'Install reprex') {
+		await installReprexInConsole();
+	} else if (choice) {
+		await vscode.env.clipboard.writeText(install);
 	}
 }
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.5.0] - 2026-10-10
+
+### Added
+
+- In Positron, reprexes run with the R interpreter you have selected instead of whatever `Rscript` is first on `PATH`.
+  `reprex.rscriptPath` still takes precedence.
+- A missing `{reprex}` package now gives a clear message with an "Install reprex" button in Positron, or a copy-to-clipboard command elsewhere.
+- Settings `reprex.sessionInfo`, `reprex.advertise`, `reprex.style` and `reprex.comment` for the matching `reprex()` options.
+- Setting `reprex.timeoutSeconds` (default 600) stops runaway reprexes.
+- Setting `reprex.keepFiguresDays` (default 30) removes old figure runs from the output location.
+- **Reprex: Clipboard** command.
+
+### Security
+
+- Each run re-checks workspace trust.
+- `reprex.rscriptPath` and `reprex.outputPath` are machine-scoped, so workspace settings cannot set them.
+- **Reprex: Clipboard** asks for confirmation and shows the code first.
+- R runs from a script file in a private temporary directory rather than `Rscript -e`, which also avoids Windows quoting problems.
+
+### Changed
+
+- `reprex.rscriptPath` now defaults to empty (auto-detect) instead of `Rscript`.
+
+
 ## [0.4.0] - 2026-10-10
 
 ### Added

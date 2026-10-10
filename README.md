@@ -21,6 +21,7 @@ under the **Reprex** category:
 | **Reprex: Selected Code**                   | Create a reprex from the current selection                       |
 | **Reprex: Active File (Choose Venue)...**   | Like above, but pick the venue (GitHub, Slack, ...) for this run |
 | **Reprex: Selected Code (Choose Venue)...** | Like above, but pick the venue (GitHub, Slack, ...) for this run |
+| **Reprex: Clipboard**                       | Create a reprex from the code on your clipboard                  |
 
 The venue used by the plain commands is set via `reprex.venue`.
 
@@ -42,15 +43,35 @@ The output then refers to the plot by a relative path such as `<name>_reprex_fil
 Attach the PNG from the output location yourself; the extension shows its path after each run that produced plots.
 The `r` venue always behaves this way.
 
+Saved figures older than `reprex.keepFiguresDays` (default 30) are removed automatically.
+
+### Other settings
+
+- `reprex.sessionInfo`, `reprex.advertise`, `reprex.style` and `reprex.comment` pass the matching `reprex()` options through. Left on `default`, reprex's own defaults and any `reprex.*` option from your `.Rprofile` apply.
+- `reprex.timeoutSeconds` stops a reprex that runs too long (default 600, `0` disables).
+- `reprex.copyToClipboard` controls whether the result is copied automatically.
+
 ## Requirements
 
-- **R** must be installed and `Rscript` must be on your `PATH` (or set `reprex.rscriptPath`)
+- **R** must be installed. In Positron the extension uses the R interpreter you have selected; otherwise it uses `Rscript` from your `PATH`, or the path in `reprex.rscriptPath`
 - The **[reprex](https://reprex.tidyverse.org/)** package must be installed:
   ```r
   install.packages("reprex")
   # or
   pak::pak("reprex")
   ```
+
+## Security
+
+A reprex runs R code, so only use it on code and in workspaces you trust.
+
+- The extension is disabled in untrusted workspaces, and each run checks workspace trust again.
+- R starts in the directory of the file you run, so a `.Rprofile` or `.Renviron` there is executed, as it would be in an R console.
+  This is what lets reprexes see an `renv` project library, but it also means you should not run reprexes from folders you do not trust.
+- **Reprex: Clipboard** shows the code and asks before running it.
+- `reprex.rscriptPath` and `reprex.outputPath` can only be set in user settings, not in a workspace's `.vscode/settings.json`, so a repository cannot point the extension at its own executable.
+- The `gh`, `so`, `ds`, `slack` and `html` venues upload plots to imgur by default, see [Plots](#plots).
+- R is started without a shell, so file names and settings cannot inject commands.
 
 ## Installation
 

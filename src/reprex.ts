@@ -19,9 +19,14 @@ export function isVenue(value: string): value is VenueId {
 	return VENUES.some(v => v.id === value);
 }
 
+// Run from a file in a private temp dir (not `-e`, whose quoting differs per OS).
 // Values arrive via commandArgs(), so nothing is interpolated into R code or a shell.
 const R_SCRIPT = `
 args <- commandArgs(trailingOnly = TRUE)
+if (!requireNamespace("reprex", quietly = TRUE)) {
+  message("REPREX_NOT_INSTALLED")
+  quit(status = 3)
+}
 wd <- if (nzchar(args[3])) args[3] else NULL
 run_dir <- args[5]
 # reprex ignores \`wd\` for file input; a trailing "" keeps the lines from being read as a path.
@@ -49,8 +54,19 @@ tidy <- function() {
   unlink(new, recursive = TRUE)
 }
 
+# Empty args keep reprex's own defaults (including options set in .Rprofile).
+opts <- list()
+flag <- function(x) if (x %in% c("true", "false")) identical(x, "true")
+if (!is.null(flag(args[7]))) opts$session_info <- flag(args[7])
+if (!is.null(flag(args[8]))) opts$advertise <- flag(args[8])
+if (!is.null(flag(args[9]))) opts$style <- flag(args[9])
+if (nzchar(args[10])) opts$comment <- args[10]
+
 out <- tryCatch(
-  reprex::reprex(input = lines, venue = args[2], wd = wd, html_preview = FALSE),
+  do.call(reprex::reprex, c(
+    list(input = lines, venue = args[2], wd = wd, html_preview = FALSE),
+    opts
+  )),
   finally = tidy()
 )
 writeLines(out, args[4])
@@ -108,6 +124,52 @@ function uniqueRunName(): string {
 	return `${stamp}-${randomBytes(3).toString('hex')}`;
 }
 
+export class ReprexNotInstalledError extends Error {
+	constructor() {
+		super('The R package {reprex} is not installed');
+		this.name = 'ReprexNotInstalledError';
+	}
+}
+
+// Unset fields keep reprex's own defaults.
+export interface ReprexOptions {
+	sessionInfo?: boolean;
+	advertise?: boolean;
+	style?: boolean;
+	comment?: string;
+}
+
+const flagArg = (v: boolean | undefined) => v === undefined ? '' : String(v);
+
+export function reprexOptionArgs(o: ReprexOptions = {}): string[] {
+	return [flagArg(o.sessionInfo), flagArg(o.advertise), flagArg(o.style), o.comment ?? ''];
+}
+
+// Positron reports the path to `R`; `Rscript` lives next to it.
+export function siblingRscript(runtimePath: string, platform: NodeJS.Platform = process.platform): string {
+	const p = platform === 'win32' ? path.win32 : path.posix;
+	return p.join(p.dirname(runtimePath), platform === 'win32' ? 'Rscript.exe' : 'Rscript');
+}
+
+const RUN_DIR_NAME = /^\d{14}-[0-9a-f]{6}$/;
+
+// Only touches directories this extension created, so a custom output path is safe.
+export async function pruneOldRuns(base: string, days: number, now = Date.now()): Promise<void> {
+	if (days <= 0) {
+		return;
+	}
+	const entries = await fs.readdir(base, { withFileTypes: true }).catch(() => []);
+	await Promise.all(entries
+		.filter(e => e.isDirectory() && RUN_DIR_NAME.test(e.name))
+		.map(async e => {
+			const dir = path.join(base, e.name);
+			const { mtimeMs } = await fs.stat(dir);
+			if (now - mtimeMs > days * 86_400_000) {
+				await fs.rm(dir, { recursive: true, force: true });
+			}
+		}));
+}
+
 export interface RenderResult {
 	output: string;
 	// Set when the run produced figures that were kept on disk.
@@ -121,6 +183,9 @@ export interface RenderOptions {
 	outputBase?: string;
 	// reprex uploads plots to imgur for every venue except 'r'; false keeps them local.
 	uploadPlots?: boolean;
+	reprexOptions?: ReprexOptions;
+	// 0 or unset means no limit.
+	timeoutMs?: number;
 	signal?: AbortSignal;
 	onProgress?: (message: string) => void;
 	onLog?: (chunk: string) => void;
@@ -134,7 +199,7 @@ function cleanLines(chunk: string): string[] {
 
 // Skips file-path and clipr noise reprex prints between its stage messages.
 export function lastStatusLine(chunk: string): string | undefined {
-	return cleanLines(chunk).filter(l => !/^['"\/]|clipr/.test(l)).pop();
+	return cleanLines(chunk).filter(l => !/^['"\/]|clipr/i.test(l)).pop();
 }
 
 export function failureMessage(stderr: string, code: number | null): string {
@@ -145,17 +210,22 @@ export function failureMessage(stderr: string, code: number | null): string {
 export async function renderReprex(text: string, opts: RenderOptions): Promise<RenderResult> {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'reprex-'));
 	const input = path.join(dir, 'input.R');
+	const script = path.join(dir, 'run.R');
 	const output = path.join(dir, 'output.txt');
 	const runDir = path.join(opts.outputBase ?? path.join(dir, 'figures'), uniqueRunName());
 
 	try {
 		await fs.writeFile(input, text, 'utf8');
+		await fs.writeFile(script, R_SCRIPT, 'utf8');
+
+		const timeout = opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined;
+		const signal = AbortSignal.any([opts.signal, timeout].filter((x): x is AbortSignal => !!x));
 
 		await new Promise<void>((resolve, reject) => {
 			const child = spawn(
 				opts.rscript || 'Rscript',
-				['-e', R_SCRIPT, input, opts.venue, opts.wd ?? '', output, runDir, String(opts.uploadPlots ?? true)],
-				{ cwd: opts.wd, signal: opts.signal }
+				[script, input, opts.venue, opts.wd ?? '', output, runDir, String(opts.uploadPlots ?? true), ...reprexOptionArgs(opts.reprexOptions)],
+				{ cwd: opts.wd, signal }
 			);
 			let err = '';
 			child.stdout.on('data', d => opts.onLog?.(String(d)));
@@ -168,10 +238,18 @@ export async function renderReprex(text: string, opts: RenderOptions): Promise<R
 					opts.onProgress?.(status);
 				}
 			});
-			child.on('error', reject);
+			child.on('error', e => {
+				if (timeout?.aborted) {
+					reject(Object.assign(new Error(`Timed out after ${Math.round(opts.timeoutMs! / 1000)} s`), { name: 'TimeoutError' }));
+				} else {
+					reject(e);
+				}
+			});
 			child.on('close', code => {
 				if (code === 0) {
 					resolve();
+				} else if (code === 3 && err.includes('REPREX_NOT_INSTALLED')) {
+					reject(new ReprexNotInstalledError());
 				} else {
 					reject(new Error(failureMessage(err, code)));
 				}
