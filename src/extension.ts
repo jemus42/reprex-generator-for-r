@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { renderReprex, VENUES, VenueId, isVenue } from './reprex';
+import { renderReprex, resolveOutputBase, OutputLocation, VENUES, VenueId, isVenue } from './reprex';
 
 const LAST_VENUE_KEY = 'lastVenue';
 
@@ -86,6 +86,15 @@ async function promptVenue(context: vscode.ExtensionContext): Promise<VenueId | 
 	return picked?.id;
 }
 
+function outputBase(document: vscode.TextDocument): string {
+	const config = vscode.workspace.getConfiguration('reprex');
+	return resolveOutputBase({
+		location: config.get<OutputLocation>('outputLocation', 'user'),
+		customPath: config.get<string>('outputPath'),
+		workspaceFolder: (vscode.workspace.getWorkspaceFolder(document.uri) ?? vscode.workspace.workspaceFolders?.[0])?.uri.fsPath
+	});
+}
+
 function workingDirectory(document: vscode.TextDocument): string | undefined {
 	if (document.uri.scheme === 'file') {
 		return path.dirname(document.uri.fsPath);
@@ -97,7 +106,7 @@ async function runReprex(text: string, venue: VenueId, document: vscode.TextDocu
 	const config = vscode.workspace.getConfiguration('reprex');
 
 	try {
-		const output = await vscode.window.withProgress(
+		const { output, figuresDir } = await vscode.window.withProgress(
 			{ location: vscode.ProgressLocation.Notification, title: `Reprex (${venue})`, cancellable: true },
 			async (progress, token) => {
 				progress.report({ message: 'Starting R...' });
@@ -108,6 +117,8 @@ async function runReprex(text: string, venue: VenueId, document: vscode.TextDocu
 					venue,
 					rscript: config.get<string>('rscriptPath'),
 					wd: workingDirectory(document),
+					outputBase: outputBase(document),
+					uploadPlots: config.get<boolean>('uploadPlots', true),
 					signal: abort.signal,
 					onProgress: message => progress.report({ message }),
 					onLog: chunk => log.append(chunk)
@@ -122,6 +133,13 @@ async function runReprex(text: string, venue: VenueId, document: vscode.TextDocu
 		if (config.get<boolean>('copyToClipboard', true)) {
 			await vscode.env.clipboard.writeText(output);
 			vscode.window.setStatusBarMessage('Reprex copied to clipboard', 4000);
+		}
+
+		if (figuresDir) {
+			const choice = await vscode.window.showInformationMessage(`Reprex figures saved to ${figuresDir}`, 'Reveal');
+			if (choice === 'Reveal') {
+				await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(figuresDir));
+			}
 		}
 	} catch (error) {
 		if ((error as Error).name === 'AbortError') {

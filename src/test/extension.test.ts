@@ -1,7 +1,10 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { execSync } from 'child_process';
-import { renderReprex, lastStatusLine, failureMessage, isVenue } from '../reprex';
+import { renderReprex, lastStatusLine, failureMessage, isVenue, resolveOutputBase } from '../reprex';
 
 function rscriptAvailable(): boolean {
 	try {
@@ -106,7 +109,7 @@ suite('R Integration', () => {
 
 	(hasReprex ? test : test.skip)('renders GitHub-flavored markdown', async function () {
 		this.timeout(30_000);
-		const output = await renderReprex('x <- 1:5\nmean(x)\n', { venue: 'gh' });
+		const { output } = await renderReprex('x <- 1:5\nmean(x)\n', { venue: 'gh' });
 		assert.ok(output.includes('``` r'), `Expected R code fence, got:\n${output}`);
 		assert.ok(output.includes('mean(x)'));
 		assert.ok(output.includes('3'));
@@ -114,13 +117,13 @@ suite('R Integration', () => {
 
 	(hasReprex ? test : test.skip)('renders slack venue', async function () {
 		this.timeout(30_000);
-		const output = await renderReprex('1 + 1\n', { venue: 'slack' });
+		const { output } = await renderReprex('1 + 1\n', { venue: 'slack' });
 		assert.ok(output.includes('1 + 1'));
 	});
 
 	(hasReprex ? test : test.skip)('captures errors in the code under test', async function () {
 		this.timeout(30_000);
-		const output = await renderReprex('stop("test error")\n', { venue: 'gh' });
+		const { output } = await renderReprex('stop("test error")\n', { venue: 'gh' });
 		assert.ok(/error/i.test(output), `Expected error in output, got:\n${output}`);
 	});
 
@@ -132,14 +135,82 @@ suite('R Integration', () => {
 		await assert.rejects(pending, { name: 'AbortError' });
 	});
 
+	(hasReprex ? test : test.skip)('keeps figures in outputBase and leaves wd clean', async function () {
+		this.timeout(60_000);
+		const wd = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-'));
+		const outputBase = fs.mkdtempSync(path.join(os.tmpdir(), 'figs-'));
+		try {
+			const { figuresDir } = await renderReprex('plot(1:3)\n', { venue: 'r', wd, outputBase });
+			assert.deepStrictEqual(fs.readdirSync(wd), [], 'wd should have no leftovers');
+			assert.ok(figuresDir?.startsWith(outputBase), `figuresDir: ${figuresDir}`);
+			assert.ok(fs.readdirSync(figuresDir!).some(f => f.endsWith('_files')));
+		} finally {
+			fs.rmSync(wd, { recursive: true, force: true });
+			fs.rmSync(outputBase, { recursive: true, force: true });
+		}
+	});
+
+	(hasReprex ? test : test.skip)('uploadPlots: false keeps plot links local without extra output', async function () {
+		this.timeout(60_000);
+		const wd = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-'));
+		try {
+			const { output } = await renderReprex('plot(1:3)\n', { venue: 'gh', wd, outputBase: path.join(wd, 'out'), uploadPlots: false });
+			assert.ok(!output.includes('imgur'), output);
+			assert.ok(output.includes('_files/figure-gfm/'), output);
+			assert.ok(!output.includes('upload.fun'), 'hidden chunk must not leak into output');
+		} finally {
+			fs.rmSync(wd, { recursive: true, force: true });
+		}
+	});
+
 	(hasReprex ? test : test.skip)('uses wd for relative paths', async function () {
 		this.timeout(30_000);
-		const output = await renderReprex('file.exists("package.json")\n', { venue: 'r', wd: process.cwd() });
+		const { output } = await renderReprex('file.exists("package.json")\n', { venue: 'r', wd: process.cwd() });
 		assert.ok(output.includes('#> [1] TRUE'), `Got:\n${output}`);
 	});
 
 	(hasR ? test : test.skip)('rejects with a message when Rscript is missing', async () => {
 		await assert.rejects(renderReprex('1', { venue: 'gh', rscript: 'definitely-not-rscript' }), /ENOENT/);
+	});
+});
+
+suite('resolveOutputBase', () => {
+	const base = { home: '/home/me', env: {}, platform: 'linux' as const };
+
+	test('user: XDG_CACHE_HOME wins on linux', () => {
+		assert.strictEqual(
+			resolveOutputBase({ ...base, location: 'user', env: { XDG_CACHE_HOME: '/x/cache' } }),
+			'/x/cache/reprex'
+		);
+	});
+
+	test('user: falls back to ~/.cache on linux', () => {
+		assert.strictEqual(resolveOutputBase({ ...base, location: 'user' }), '/home/me/.cache/reprex');
+	});
+
+	test('user: macOS uses Library/Caches', () => {
+		assert.strictEqual(
+			resolveOutputBase({ ...base, location: 'user', platform: 'darwin' }),
+			'/home/me/Library/Caches/reprex'
+		);
+	});
+
+	test('project: .reprex in workspace, user dir without one', () => {
+		assert.strictEqual(resolveOutputBase({ ...base, location: 'project', workspaceFolder: '/w' }), '/w/.reprex');
+		assert.strictEqual(resolveOutputBase({ ...base, location: 'project' }), '/home/me/.cache/reprex');
+	});
+
+	test('custom: expands ~, ${workspaceFolder} and relative paths', () => {
+		const custom = (customPath: string) =>
+			resolveOutputBase({ ...base, location: 'custom', customPath, workspaceFolder: '/w' });
+		assert.strictEqual(custom('~/figs'), '/home/me/figs');
+		assert.strictEqual(custom('${workspaceFolder}/out'), '/w/out');
+		assert.strictEqual(custom('out'), '/w/out');
+		assert.strictEqual(custom('/abs'), '/abs');
+	});
+
+	test('custom: empty path falls back to user dir', () => {
+		assert.strictEqual(resolveOutputBase({ ...base, location: 'custom', customPath: ' ' }), '/home/me/.cache/reprex');
 	});
 });
 

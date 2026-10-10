@@ -4,23 +4,20 @@
 [![Open VSX downloads](https://img.shields.io/open-vsx/dt/jemus42/reprex-generator-for-r)](https://open-vsx.org/extension/jemus42/reprex-generator-for-r)
 [![License: MIT](https://img.shields.io/github/license/jemus42/reprex-generator-for-r)](LICENSE.md)
 
-A [Positron](https://positron.posit.co/) / VS Code extension that brings the
-[`{reprex}`](https://reprex.tidyverse.org/) package to your editor. If you're an
-R user who relies on `reprex::reprex()` or the RStudio addin to create
-reproducible examples for GitHub issues, Stack Overflow, or Slack, this extension
-lets you do the same thing without leaving Positron or VS Code.
+A [Positron](https://positron.posit.co/) / VS Code extension that brings the [`{reprex}`](https://reprex.tidyverse.org/) package to your editor. If you're an
+R user who relies on `reprex::reprex()` or the RStudio addin to create reproducible examples for GitHub issues, Stack Overflow, or Slack, this extension lets you do the same thing without leaving Positron or VS Code.
 
 ## Features
 
 All commands are available via the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
 under the **Reprex** category:
 
-| Command | Description |
-|---------|-------------|
-| **Reprex: Start Addin** | Launch the interactive `reprex_addin()` in your R console |
-| **Reprex: Active File** | Create a reprex from the entire active file |
-| **Reprex: Selected Code** | Create a reprex from the current selection |
-| **Reprex: Active File (Choose Venue)...** | Like above, but pick the venue (GitHub, Slack, ...) for this run |
+| Command                                     | Description                                                      |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| **Reprex: Start Addin**                     | Launch the interactive `reprex_addin()` in your R console        |
+| **Reprex: Active File**                     | Create a reprex from the entire active file                      |
+| **Reprex: Selected Code**                   | Create a reprex from the current selection                       |
+| **Reprex: Active File (Choose Venue)...**   | Like above, but pick the venue (GitHub, Slack, ...) for this run |
 | **Reprex: Selected Code (Choose Venue)...** | Like above, but pick the venue (GitHub, Slack, ...) for this run |
 
 The venue used by the plain commands is set via `reprex.venue`.
@@ -29,6 +26,19 @@ The rendered reprex output is:
 
 - Opened in an editor beside your code
 - Automatically copied to your clipboard (when possible)
+
+Plots are saved per run under the location set by `reprex.outputLocation`: the user cache directory (default), `.reprex/` in the workspace (which ignores itself in git), or a custom path via `reprex.outputPath`.
+
+### Plots
+
+By default `{reprex}` uploads plots anonymously to [imgur](https://imgur.com/) and puts the image URL in the output, for every venue except `r`.
+The image is then publicly reachable, so avoid plotting sensitive data.
+The local copy is kept in the output location above either way.
+
+To keep plots local, disable `reprex.uploadPlots`.
+The output then refers to the plot by a relative path such as `<name>_reprex_files/figure-gfm/unnamed-chunk-2-1.png`, which does not exist where you paste it.
+Attach the PNG from the output location yourself; the extension shows its path after each run that produced plots.
+The `r` venue always behaves this way.
 
 ## Requirements
 

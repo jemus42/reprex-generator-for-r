@@ -75,6 +75,31 @@
           "type": "boolean",
           "default": true,
           "description": "Copy the rendered reprex to the clipboard."
+        },
+        "reprex.outputLocation": {
+          "type": "string",
+          "default": "user",
+          "enum": [
+            "user",
+            "project",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "User-wide cache directory (XDG cache dir on Linux, ~/Library/Caches on macOS, %LOCALAPPDATA% on Windows)",
+            "`.reprex/` in the workspace folder, with a self-ignoring .gitignore",
+            "The directory in `reprex.outputPath`"
+          ],
+          "description": "Where figures produced by a reprex are kept. Each run gets its own subdirectory."
+        },
+        "reprex.outputPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Directory used when `#reprex.outputLocation#` is `custom`. Supports `~` and `${workspaceFolder}`; relative paths are resolved against the workspace folder."
+        },
+        "reprex.uploadPlots": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Let `{reprex}` upload plots anonymously to imgur and link them in the output (its default for every venue except `r`). When disabled, plots stay local and the output refers to them by file path."
         }
       }
     },

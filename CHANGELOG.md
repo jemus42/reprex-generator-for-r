@@ -4,23 +4,24 @@
 
 ### Added
 
-- **Choose Venue** commands for the active file and the selection, with a quick
-  pick that remembers the last choice. Also available in the R editor context
-  menu.
-- Progress notification with live reprex stages and a cancel button; full R
-  output goes to the "Reprex" output channel, and errors offer "Show Log".
+- **Choose Venue** commands for the active file and the selection, with a quick pick that remembers the last choice.
+  Also available in the R editor context menu.
+- Progress notification with live reprex stages and a cancel button.
+  Full R output goes to the "Reprex" output channel, and errors offer "Show Log".
 - Settings `reprex.rscriptPath` and `reprex.copyToClipboard`.
+- Settings `reprex.outputLocation` (`user`, `project`, `custom`) and `reprex.outputPath` control where figures from a reprex are kept.
+  Each run gets its own subdirectory.
+  `user` (default) is the platform cache directory (`$XDG_CACHE_HOME/reprex` or `~/.cache/reprex` on Linux, `~/Library/Caches/reprex` on macOS, `%LOCALAPPDATA%\reprex\Cache` on Windows).
+  `project` is `.reprex/` in the workspace, which ignores itself in git.
+- A "Reveal" notification when a run produced figures.
+- Setting `reprex.uploadPlots` to stop `{reprex}` from uploading plots to imgur (its default for every venue except `r`).
 
 ### Changed
 
-- Output opens in a regular editor beside the code (markdown, R or HTML
-  depending on venue) instead of a webview.
-- Reprexes run in the file's directory (or the workspace root) so relative
-  paths work.
-- `Rscript` is spawned without a shell, fixing quoting problems with unusual
-  paths and Windows.
-- The extension now runs on the workspace side in remote sessions and requires
-  a trusted workspace.
+- Output opens in a regular editor beside the code (markdown, R or HTML depending on venue) instead of a webview.
+- Reprexes run in the file's directory (or the workspace root) so relative paths work.
+- `Rscript` is spawned without a shell, fixing quoting problems with unusual paths and Windows.
+- The extension now runs on the workspace side in remote sessions and requires a trusted workspace.
 
 ### Fixed
 
