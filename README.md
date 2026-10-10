@@ -16,15 +16,19 @@ under the **Reprex** category:
 | **Reprex: Start Addin** | Launch the interactive `reprex_addin()` in your R console |
 | **Reprex: Active File** | Create a reprex from the entire active file |
 | **Reprex: Selected Code** | Create a reprex from the current selection |
+| **Reprex: Active File (Choose Venue)...** | Like above, but pick the venue (GitHub, Slack, ...) for this run |
+| **Reprex: Selected Code (Choose Venue)...** | Like above, but pick the venue (GitHub, Slack, ...) for this run |
+
+The venue used by the plain commands is set via `reprex.venue`.
 
 The rendered reprex output is:
 
-- Displayed in a side panel with a copy button
+- Opened in an editor beside your code
 - Automatically copied to your clipboard (when possible)
 
 ## Requirements
 
-- **R** must be installed and `Rscript` must be available on your `PATH`
+- **R** must be installed and `Rscript` must be on your `PATH` (or set `reprex.rscriptPath`)
 - The **[reprex](https://reprex.tidyverse.org/)** package must be installed:
   ```r
   install.packages("reprex")
@@ -63,7 +67,7 @@ Prerequisites: [Node.js](https://nodejs.org/), [pnpm](https://pnpm.io/),
 # Install dependencies
 just install
 
-# Compile (webpack)
+# Compile (esbuild)
 just compile
 
 # Watch mode for development

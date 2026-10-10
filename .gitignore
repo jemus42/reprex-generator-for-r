@@ -16,3 +16,4 @@ node_modules
 # Optional caches
 .eslintcache
 TODO.md
+.DS_Store

@@ -2,20 +2,20 @@
   "name": "reprex-generator-for-r",
   "displayName": "Reprex Generator (for R)",
   "description": "Creates reproducible examples from active file or selected lines using {reprex}",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "jemus42",
   "author": {
     "name": "Lukas Burk",
     "url": "https://lukasburk.de"
   },
   "license": "MIT",
-  "homepage": "https://codeberg.org/lksbrk/reprex-generator-for-r",
+  "homepage": "https://github.com/jemus42/reprex-generator-for-r",
   "bugs": {
-    "url": "https://codeberg.org/lksbrk/reprex-generator-for-r/issues"
+    "url": "https://github.com/jemus42/reprex-generator-for-r/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://codeberg.org/lksbrk/reprex-generator-for-r.git"
+    "url": "https://github.com/jemus42/reprex-generator-for-r.git"
   },
   "keywords": [
     "r",
@@ -47,7 +47,14 @@
         "reprex.venue": {
           "type": "string",
           "default": "gh",
-          "enum": ["gh", "slack", "r", "html", "so", "ds"],
+          "enum": [
+            "gh",
+            "slack",
+            "r",
+            "html",
+            "so",
+            "ds"
+          ],
           "enumDescriptions": [
             "GitHub-Flavored Markdown (default)",
             "Slack message",
@@ -56,7 +63,17 @@
             "Stack Overflow (alias for gh)",
             "Discourse (alias for gh)"
           ],
-          "description": "Default output format for reprex"
+          "description": "Default output format for reprex. Use the \"choose venue\" commands to override per run."
+        },
+        "reprex.rscriptPath": {
+          "type": "string",
+          "default": "Rscript",
+          "markdownDescription": "Path to the `Rscript` executable. Defaults to `Rscript` from `PATH`."
+        },
+        "reprex.copyToClipboard": {
+          "type": "boolean",
+          "default": true,
+          "description": "Copy the rendered reprex to the clipboard."
         }
       }
     },
@@ -75,14 +92,48 @@
         "command": "reprex-generator-for-r.reprexSelection",
         "title": "Selected Code",
         "category": "Reprex"
+      },
+      {
+        "command": "reprex-generator-for-r.reprexFileVenue",
+        "title": "Active File (Choose Venue)...",
+        "category": "Reprex"
+      },
+      {
+        "command": "reprex-generator-for-r.reprexSelectionVenue",
+        "title": "Selected Code (Choose Venue)...",
+        "category": "Reprex"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "reprex-generator-for-r.reprexSelection",
+          "when": "editorLangId == r && editorHasSelection",
+          "group": "reprex@1"
+        },
+        {
+          "command": "reprex-generator-for-r.reprexSelectionVenue",
+          "when": "editorLangId == r && editorHasSelection",
+          "group": "reprex@2"
+        },
+        {
+          "command": "reprex-generator-for-r.reprexFile",
+          "when": "editorLangId == r && !editorHasSelection",
+          "group": "reprex@1"
+        },
+        {
+          "command": "reprex-generator-for-r.reprexFileVenue",
+          "when": "editorLangId == r && !editorHasSelection",
+          "group": "reprex@2"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile": "tsc --noEmit && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "tsc --noEmit && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
@@ -90,17 +141,26 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.102.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "@typescript-eslint/eslint-plugin": "^8.39.0",
-    "@typescript-eslint/parser": "^8.39.0",
-    "eslint": "^9.32.0",
-    "typescript": "^5.9.2",
-    "ts-loader": "^9.5.2",
-    "webpack": "^5.101.0",
-    "webpack-cli": "^6.0.1",
+    "@types/vscode": "^1.102.0",
     "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.32.0",
+    "ovsx": "^1.2.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.71.1"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Reprex runs Rscript, which sources .Rprofile files from the workspace."
+    },
+    "virtualWorkspaces": false
   }
 }

@@ -1,14 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import { execSync } from 'child_process';
-import { promisify } from 'util';
-import { exec } from 'child_process';
-import { escapeHtml } from '../extension';
-
-const execAsync = promisify(exec);
+import { renderReprex, lastStatusLine, failureMessage, isVenue } from '../reprex';
 
 function rscriptAvailable(): boolean {
 	try {
@@ -30,36 +23,6 @@ function reprexInstalled(): boolean {
 
 const hasR = rscriptAvailable();
 const hasReprex = hasR && reprexInstalled();
-
-suite('escapeHtml', () => {
-	test('escapes ampersands', () => {
-		assert.strictEqual(escapeHtml('a & b'), 'a &amp; b');
-	});
-
-	test('escapes angle brackets', () => {
-		assert.strictEqual(escapeHtml('<div>'), '&lt;div&gt;');
-	});
-
-	test('escapes quotes', () => {
-		assert.strictEqual(escapeHtml('"hello"'), '&quot;hello&quot;');
-		assert.strictEqual(escapeHtml("it's"), "it&#039;s");
-	});
-
-	test('escapes all special characters together', () => {
-		assert.strictEqual(
-			escapeHtml(`<a href="x" class='y'>&</a>`),
-			'&lt;a href=&quot;x&quot; class=&#039;y&#039;&gt;&amp;&lt;/a&gt;'
-		);
-	});
-
-	test('returns empty string unchanged', () => {
-		assert.strictEqual(escapeHtml(''), '');
-	});
-
-	test('returns plain text unchanged', () => {
-		assert.strictEqual(escapeHtml('hello world 123'), 'hello world 123');
-	});
-});
 
 suite('Extension Lifecycle', () => {
 	test('extension is present', () => {
@@ -93,9 +56,11 @@ suite('Command Registration', () => {
 		assert.ok(commands.includes('reprex-generator-for-r.reprexSelection'));
 	});
 
-	test('reprexClipboard command is no longer registered', async () => {
+	test('venue commands are registered', async () => {
 		const commands = await vscode.commands.getCommands();
-		assert.ok(!commands.includes('reprex-generator-for-r.reprexClipboard'));
+
+		assert.ok(commands.includes('reprex-generator-for-r.reprexFileVenue'));
+		assert.ok(commands.includes('reprex-generator-for-r.reprexSelectionVenue'));
 	});
 });
 
@@ -139,92 +104,64 @@ suite('R Integration', () => {
 		assert.ok(result.match(/^\d+\.\d+\.\d+/), `Expected version string, got: ${result}`);
 	});
 
-	(hasReprex ? test : test.skip)('reprex produces GitHub-flavored markdown output', async function () {
+	(hasReprex ? test : test.skip)('renders GitHub-flavored markdown', async function () {
 		this.timeout(30_000);
-
-		const tempDir = os.tmpdir();
-		const inputFile = path.join(tempDir, `test_reprex_${Date.now()}.R`);
-		const outputFile = path.join(tempDir, `test_reprex_${Date.now()}.md`);
-
-		try {
-			fs.writeFileSync(inputFile, 'x <- 1:5\nmean(x)\n', 'utf8');
-
-			const command = `
-				reprex_result <- reprex::reprex(input = '${inputFile}', venue = 'gh', html_preview = FALSE);
-				writeLines(reprex_result, '${outputFile}');
-				cat('REPREX_SUCCESS')
-			`.replace(/\n/g, ' ').replace(/\t/g, ' ');
-
-			const { stdout } = await execAsync(`Rscript -e "${command}"`);
-			assert.ok(stdout.includes('REPREX_SUCCESS'), 'Rscript should complete successfully');
-
-			assert.ok(fs.existsSync(outputFile), 'Output file should be created');
-			const output = fs.readFileSync(outputFile, 'utf8');
-
-			// GitHub venue reprex wraps code in ```r fences
-			assert.ok(output.includes('``` r'), `Output should contain R code fence, got:\n${output}`);
-			assert.ok(output.includes('mean(x)'), `Output should contain the original code, got:\n${output}`);
-			assert.ok(output.includes('3'), `Output should contain the result (mean of 1:5 = 3), got:\n${output}`);
-		} finally {
-			if (fs.existsSync(inputFile)) { fs.unlinkSync(inputFile); }
-			if (fs.existsSync(outputFile)) { fs.unlinkSync(outputFile); }
-		}
+		const output = await renderReprex('x <- 1:5\nmean(x)\n', { venue: 'gh' });
+		assert.ok(output.includes('``` r'), `Expected R code fence, got:\n${output}`);
+		assert.ok(output.includes('mean(x)'));
+		assert.ok(output.includes('3'));
 	});
 
-	(hasReprex ? test : test.skip)('reprex handles erroring code', async function () {
+	(hasReprex ? test : test.skip)('renders slack venue', async function () {
 		this.timeout(30_000);
-
-		const tempDir = os.tmpdir();
-		const inputFile = path.join(tempDir, `test_reprex_err_${Date.now()}.R`);
-		const outputFile = path.join(tempDir, `test_reprex_err_${Date.now()}.md`);
-
-		try {
-			// Code that produces an error in reprex output (but reprex itself succeeds)
-			fs.writeFileSync(inputFile, 'stop("test error")\n', 'utf8');
-
-			const command = `
-				reprex_result <- reprex::reprex(input = '${inputFile}', venue = 'gh', html_preview = FALSE);
-				writeLines(reprex_result, '${outputFile}');
-				cat('REPREX_SUCCESS')
-			`.replace(/\n/g, ' ').replace(/\t/g, ' ');
-
-			const { stdout } = await execAsync(`Rscript -e "${command}"`);
-			assert.ok(stdout.includes('REPREX_SUCCESS'), 'Rscript should complete successfully');
-
-			const output = fs.readFileSync(outputFile, 'utf8');
-			// reprex captures the error in the output
-			assert.ok(
-				output.includes('Error') || output.includes('error'),
-				`Output should contain the error, got:\n${output}`
-			);
-		} finally {
-			if (fs.existsSync(inputFile)) { fs.unlinkSync(inputFile); }
-			if (fs.existsSync(outputFile)) { fs.unlinkSync(outputFile); }
-		}
+		const output = await renderReprex('1 + 1\n', { venue: 'slack' });
+		assert.ok(output.includes('1 + 1'));
 	});
 
-	(hasReprex ? test : test.skip)('temp files are cleaned up after reprex', async function () {
+	(hasReprex ? test : test.skip)('captures errors in the code under test', async function () {
 		this.timeout(30_000);
+		const output = await renderReprex('stop("test error")\n', { venue: 'gh' });
+		assert.ok(/error/i.test(output), `Expected error in output, got:\n${output}`);
+	});
 
-		const tempDir = os.tmpdir();
-		const inputFile = path.join(tempDir, `test_reprex_cleanup_${Date.now()}.R`);
-		const outputFile = path.join(tempDir, `test_reprex_cleanup_${Date.now()}.md`);
+	(hasReprex ? test : test.skip)('rejects when cancelled', async function () {
+		this.timeout(30_000);
+		const abort = new AbortController();
+		const pending = renderReprex('Sys.sleep(20)\n', { venue: 'gh', signal: abort.signal });
+		setTimeout(() => abort.abort(), 1500);
+		await assert.rejects(pending, { name: 'AbortError' });
+	});
 
-		fs.writeFileSync(inputFile, 'TRUE\n', 'utf8');
+	(hasReprex ? test : test.skip)('uses wd for relative paths', async function () {
+		this.timeout(30_000);
+		const output = await renderReprex('file.exists("package.json")\n', { venue: 'r', wd: process.cwd() });
+		assert.ok(output.includes('#> [1] TRUE'), `Got:\n${output}`);
+	});
 
-		const command = `
-			reprex_result <- reprex::reprex(input = '${inputFile}', venue = 'gh', html_preview = FALSE);
-			writeLines(reprex_result, '${outputFile}');
-			cat('REPREX_SUCCESS')
-		`.replace(/\n/g, ' ').replace(/\t/g, ' ');
+	(hasR ? test : test.skip)('rejects with a message when Rscript is missing', async () => {
+		await assert.rejects(renderReprex('1', { venue: 'gh', rscript: 'definitely-not-rscript' }), /ENOENT/);
+	});
+});
 
-		await execAsync(`Rscript -e "${command}"`);
+suite('Helpers', () => {
+	test('lastStatusLine strips ANSI and bullets', () => {
+		assert.strictEqual(lastStatusLine('\u001b[36mℹ\u001b[39m Rendering reprex...\n'), 'Rendering reprex...');
+	});
 
-		// Clean up like the extension does
-		if (fs.existsSync(inputFile)) { fs.unlinkSync(inputFile); }
-		if (fs.existsSync(outputFile)) { fs.unlinkSync(outputFile); }
+	test('lastStatusLine returns undefined for blank input', () => {
+		assert.strictEqual(lastStatusLine('\n  \n'), undefined);
+	});
 
-		assert.ok(!fs.existsSync(inputFile), 'Input file should be cleaned up');
-		assert.ok(!fs.existsSync(outputFile), 'Output file should be cleaned up');
+	test('lastStatusLine skips paths and clipr noise', () => {
+		assert.strictEqual(lastStatusLine("Rendering reprex...\n'/tmp/x.md'\nCLIPR_ALLOW has not been set\n"), 'Rendering reprex...');
+	});
+
+	test('failureMessage drops Execution halted', () => {
+		assert.strictEqual(failureMessage('Error: bad venue\nExecution halted\n', 1), 'Error: bad venue');
+	});
+
+	test('isVenue accepts known and rejects unknown venues', () => {
+		assert.ok(isVenue('slack'));
+		assert.ok(!isVenue("gh'; rm -rf /"));
 	});
 });

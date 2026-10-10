@@ -5,9 +5,6 @@ set dotenv-load
 # Extension version extracted from package.json
 VERSION := `jq -r < package.json .version`
 
-# Base URL for resolving relative links in README (vsce only auto-detects GitHub/GitLab)
-REPO_URL := "https://codeberg.org/lksbrk/reprex-generator-for-r/raw/branch/main/"
-
 # Install dependencies
 install:
 	pnpm install
@@ -22,7 +19,7 @@ watch:
 
 # Bundle the extension into .vsix file
 bundle:
-	vsce package --baseContentUrl {{REPO_URL}} --baseImagesUrl {{REPO_URL}}
+	pnpm exec vsce package --no-dependencies
 
 # Install the extension locally from .vsix file
 install-extension: bundle
@@ -56,12 +53,12 @@ uninstall:
 
 # Publish to OpenVSX (requires OVSX_TOKEN environment variable)
 publish-ovsx: bundle
-	ovsx publish reprex-generator-for-r-{{VERSION}}.vsix -p $OVSX_TOKEN
+	pnpm exec ovsx publish reprex-generator-for-r-{{VERSION}}.vsix -p $OVSX_TOKEN
 
 # Publish to VS Code Marketplace (requires vsce login)
 publish-vscode: bundle
-	vsce publish
+	pnpm exec vsce publish --no-dependencies
 
 # Dry run to check what would be published
 publish-check:
-	vsce ls
+	pnpm exec vsce ls --no-dependencies

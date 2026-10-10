@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.4.0] - 2026-10-10
+
+### Added
+
+- **Choose Venue** commands for the active file and the selection, with a quick
+  pick that remembers the last choice. Also available in the R editor context
+  menu.
+- Progress notification with live reprex stages and a cancel button; full R
+  output goes to the "Reprex" output channel, and errors offer "Show Log".
+- Settings `reprex.rscriptPath` and `reprex.copyToClipboard`.
+
+### Changed
+
+- Output opens in a regular editor beside the code (markdown, R or HTML
+  depending on venue) instead of a webview.
+- Reprexes run in the file's directory (or the workspace root) so relative
+  paths work.
+- `Rscript` is spawned without a shell, fixing quoting problems with unusual
+  paths and Windows.
+- The extension now runs on the workspace side in remote sessions and requires
+  a trusted workspace.
+
+### Fixed
+
+- Failed renders were silently ignored; the R error is now shown.
+
 ## [0.3.0] - 2025-03-16
 
 ### Added
