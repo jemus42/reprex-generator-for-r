@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - name: Check tag matches package.json
+        run: test "v$(jq -r .version package.json)" = "$GITHUB_REF_NAME"
+      - run: pnpm exec vsce package --no-dependencies
+      - name: Publish to Open VSX
+        run: pnpm exec ovsx publish *.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_TOKEN }}
+      - name: Create GitHub release
+        run: |
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## \[/ { if (p) exit; p = index($0, "[" v "]") > 0; next } p' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" *.vsix --title "$GITHUB_REF_NAME" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
